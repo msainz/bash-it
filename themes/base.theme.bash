@@ -3,6 +3,7 @@
 THEME_PROMPT_HOST='\H'
 SCM_THEME_PROMPT_DIRTY=' ✗'
 SCM_THEME_PROMPT_CLEAN=' ✓'
+SCM_THEME_PROMPT_UNKNOWN=' ?'
 SCM_THEME_PROMPT_PREFIX=' |'
 SCM_THEME_PROMPT_SUFFIX='|'
 
@@ -69,36 +70,50 @@ function scm_prompt_info {
   [[ $SCM == $SCM_SVN ]] && svn_prompt_info && return
 }
 
+# Add a .bash_it_ignore file to avoid scm status checks
+# which may be inconvenient/unwanted for very large repos
+
 function git_prompt_vars {
-  if [[ -n $(git status -s 2> /dev/null |grep -v ^# |grep -v "working directory clean") ]]; then
-    SCM_DIRTY=1
-     SCM_STATE=${GIT_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
+  if [[ -e .bash_it_ignore ]]; then
+    SCM_STATE=${GIT_THEME_PROMPT_UNKNOWN:-$SCM_THEME_PROMPT_UNKNOWN}
   else
-    SCM_DIRTY=0
-     SCM_STATE=${GIT_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
+    if [[ -n $(git status -s 2> /dev/null |grep -v ^# |grep -v "working directory clean") ]]; then
+      SCM_DIRTY=1
+       SCM_STATE=${GIT_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
+    else
+      SCM_DIRTY=0
+       SCM_STATE=${GIT_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
+    fi
+    local ref=$(git symbolic-ref HEAD 2> /dev/null)
+    SCM_BRANCH=${ref#refs/heads/}
+    SCM_CHANGE=$(git rev-parse HEAD 2>/dev/null)
   fi
   SCM_PREFIX=${GIT_THEME_PROMPT_PREFIX:-$SCM_THEME_PROMPT_PREFIX}
   SCM_SUFFIX=${GIT_THEME_PROMPT_SUFFIX:-$SCM_THEME_PROMPT_SUFFIX}
-  local ref=$(git symbolic-ref HEAD 2> /dev/null)
-  SCM_BRANCH=${ref#refs/heads/}
-  SCM_CHANGE=$(git rev-parse HEAD 2>/dev/null)
 }
 
 function svn_prompt_vars {
-  if [[ -n $(svn status 2> /dev/null) ]]; then
-    SCM_DIRTY=1
-      SCM_STATE=${SVN_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
+  if [[ -e .bash_it_ignore ]]; then
+    SCM_STATE=${SVN_THEME_PROMPT_UNKNOWN:-$SCM_THEME_PROMPT_UNKNOWN}
   else
-    SCM_DIRTY=0
-      SCM_STATE=${SVN_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
+    if [[ -n $(svn status 2> /dev/null) ]]; then
+      SCM_DIRTY=1
+        SCM_STATE=${SVN_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
+    else
+      SCM_DIRTY=0
+        SCM_STATE=${SVN_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
+    fi
+    SCM_BRANCH=$(svn info 2> /dev/null | awk -F/ '/^URL:/ { for (i=0; i<=NF; i++) { if ($i == "branches" || $i == "tags" ) { print $(i+1); break }; if ($i == "trunk") { print $i; break } } }') || return
+    SCM_CHANGE=$(svn info 2> /dev/null | sed -ne 's#^Revision: ##p' )
   fi
   SCM_PREFIX=${SVN_THEME_PROMPT_PREFIX:-$SCM_THEME_PROMPT_PREFIX}
   SCM_SUFFIX=${SVN_THEME_PROMPT_SUFFIX:-$SCM_THEME_PROMPT_SUFFIX}
-  SCM_BRANCH=$(svn info 2> /dev/null | awk -F/ '/^URL:/ { for (i=0; i<=NF; i++) { if ($i == "branches" || $i == "tags" ) { print $(i+1); break }; if ($i == "trunk") { print $i; break } } }') || return
-  SCM_CHANGE=$(svn info 2> /dev/null | sed -ne 's#^Revision: ##p' )
 }
 
 function hg_prompt_vars {
+  if [[ -e .bash_it_ignore ]]; then
+    SCM_STATE=${HG_THEME_PROMPT_UNKNOWN:-$SCM_THEME_PROMPT_UNKNOWN}
+  else
     if [[ -n $(hg status 2> /dev/null) ]]; then
       SCM_DIRTY=1
         SCM_STATE=${HG_THEME_PROMPT_DIRTY:-$SCM_THEME_PROMPT_DIRTY}
@@ -106,10 +121,11 @@ function hg_prompt_vars {
       SCM_DIRTY=0
         SCM_STATE=${HG_THEME_PROMPT_CLEAN:-$SCM_THEME_PROMPT_CLEAN}
     fi
-    SCM_PREFIX=${HG_THEME_PROMPT_PREFIX:-$SCM_THEME_PROMPT_PREFIX}
-    SCM_SUFFIX=${HG_THEME_PROMPT_SUFFIX:-$SCM_THEME_PROMPT_SUFFIX}
     SCM_BRANCH=$(hg summary 2> /dev/null | grep branch: | awk '{print $2}')
     SCM_CHANGE=$(hg summary 2> /dev/null | grep parent: | awk '{print $2}')
+  fi
+  SCM_PREFIX=${HG_THEME_PROMPT_PREFIX:-$SCM_THEME_PROMPT_PREFIX}
+  SCM_SUFFIX=${HG_THEME_PROMPT_SUFFIX:-$SCM_THEME_PROMPT_SUFFIX}
 }
 
 function rvm_version_prompt {
